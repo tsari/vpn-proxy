@@ -1,0 +1,79 @@
+#!/bin/bash
+if [ -z $(docker ps -q -f name=openvpn) ]
+then
+    FILEPATH=`zenity --file-selection --title="VPN Connection - choose config file" --file-filter="OpenVPN configuration | *.ovpn *.conf" --file-filter="All files | *"`
+    case $? in
+         1)
+                zenity  --info --text "No file chosen.";;
+         -1)
+                zenity  --error --text "Unexpected error.";;
+    esac
+
+    if [ ! $? -eq 0 ]
+    then
+        exit;
+    fi
+
+elif [ ! -z $(docker ps -q -f name=openvpn) ]
+then
+    zenity --question --title "VPN Connection" --text="Would you like to disconnect from vpn?" --ok-label="Yes" --cancel-label="No"
+    if [ $? = 0 ]
+    then
+        DISCONNECT=true
+    else
+        exit;
+    fi
+fi
+
+
+if [ ! -z $FILEPATH ]
+then
+    FILE=$(basename $FILEPATH)
+    DIR=$(dirname $FILEPATH)
+
+    docker run -d --cap-add=NET_ADMIN \
+         --device /dev/net/tun \
+         --name openvpn \
+         -v $DIR:/vpn \
+         -p "3128:3128" \
+         --dns=8.8.4.4 \
+         --dns=8.8.8.8 \
+         --dns=192.168.22.1 \
+         --dns=192.168.22.3 \
+    tsari/openvpn
+
+    if [ $? -eq 0 ] 
+    then
+        passfile=userpass.conf
+
+        name=$(zenity --title="VPN Credentials" --text "Enter the vpn username" --entry)
+        pass=$(zenity --title="VPN Credentials" --text "Enter the vpn password" --password)
+        printf $name > $passfile
+        printf "\n" >> $passfile
+        printf $pass >> $passfile
+
+        docker exec -d openvpn openvpn --cd /vpn --config /vpn/$FILE --auth-user-pass $passfile --management localhost 9999
+
+        if [ $? -eq 0 ] 
+        then 
+            zenity --info --text="Successfully connected to vpn!"
+        else
+            zenity --error --title "VPN Connection" --text "Failed to connect"
+            docker stop openvpn
+            docker rm openvpn
+        fi
+
+        rm $passfile
+        
+    fi
+
+elif [ $DISCONNECT = true ]
+then
+    docker exec openvpn openvpn-disconnect
+    docker stop openvpn
+    docker rm openvpn
+
+    if [ $? = 0 ]; then
+        zenity --info --text="Successfully disconnected from vpn!"
+    fi
+fi
