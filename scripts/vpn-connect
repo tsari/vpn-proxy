@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -e
+docker run -it --rm --name openvpn -v $PWD:/etc/openvpn --device /dev/net/tun --cap-add=NET_ADMIN -p "3128:3128" tsari/openvpn-proxy "$@"

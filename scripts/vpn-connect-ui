@@ -31,47 +31,36 @@ then
     FILE=$(basename $FILEPATH)
     DIR=$(dirname $FILEPATH)
 
+    passfile=userpass.conf
+
+    name=$(zenity --title="VPN Credentials" --text "Enter the vpn username" --entry)
+    pass=$(zenity --title="VPN Credentials" --text "Enter the vpn password" --password)
+    printf $name > $DIR/$passfile
+    printf "\n" >> $DIR/$passfile
+    printf $pass >> $DIR/$passfile
+
+
     docker run -d --cap-add=NET_ADMIN \
          --device /dev/net/tun \
          --name openvpn \
-         -v $DIR:/vpn \
+         -v $DIR:/etc/openvpn \
          -p "3128:3128" \
-         --dns=8.8.4.4 \
-         --dns=8.8.8.8 \
-         --dns=192.168.22.1 \
-         --dns=192.168.22.3 \
-    tsari/openvpn
+    tsari/openvpn-proxy --config $FILE --auth-user-pass $passfile --management localhost 9999
 
-    if [ $? -eq 0 ] 
+    if [ $? -eq 0 ]
     then
-        passfile=userpass.conf
-
-        name=$(zenity --title="VPN Credentials" --text "Enter the vpn username" --entry)
-        pass=$(zenity --title="VPN Credentials" --text "Enter the vpn password" --password)
-        printf $name > $passfile
-        printf "\n" >> $passfile
-        printf $pass >> $passfile
-
-        docker exec -d openvpn openvpn --cd /vpn --config /vpn/$FILE --auth-user-pass $passfile --management localhost 9999
-
-        if [ $? -eq 0 ] 
-        then 
-            zenity --info --text="Successfully connected to vpn!"
-        else
-            zenity --error --title "VPN Connection" --text "Failed to connect"
-            docker stop openvpn
-            docker rm openvpn
-        fi
-
-        rm $passfile
-        
+        zenity --info --text="Successfully connected to vpn!"
+    else
+        zenity --error --title "VPN Connection" --text "Failed to connect"
+        docker rm -f openvpn
     fi
+
+    rm $DIR/$passfile
 
 elif [ $DISCONNECT = true ]
 then
-    docker exec openvpn openvpn-disconnect
-    docker stop openvpn
-    docker rm openvpn
+    docker exec openvpn openvpn-disconnect && \
+    docker rm -f openvpn
 
     if [ $? = 0 ]; then
         zenity --info --text="Successfully disconnected from vpn!"
