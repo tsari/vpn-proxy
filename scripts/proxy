@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+set -e
+docker run -it --rm --name proxy -v $PWD/exceptions:/etc/squit/expections -p "8080:3128" -e PARENT_PROXY_IP=localhost -e PARENT_PROXY_PORT=3128 tsari/proxy "$@"
